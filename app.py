@@ -16,6 +16,16 @@ st.set_page_config(
 if os.path.exists("style.css"):
     with open("style.css", "r", encoding="utf-8") as f:
         css = f.read()
+    
+    # Limpa seletores globais do CSS original que conflitam com as colunas e widgets nativos do Streamlit
+    import re
+    css = re.sub(r'body\s*\{[^}]*\}', '', css)
+    css = re.sub(r'body::before\s*\{[^}]*\}', '', css)
+    css = re.sub(r'\*\s*\{[^}]*\}', '', css)
+    css = re.sub(r'input,\s*select\s*\{[^}]*\}', '', css)
+    css = re.sub(r'input\[data-prefix\]\s*\{[^}]*\}', '', css)
+    css = re.sub(r'input:focus,\s*select:focus\s*\{[^}]*\}', '', css)
+    
     # Adicionamos pequenas correções para harmonizar o CSS original com a estrutura do Streamlit
     custom_css = f"""
     <style>
@@ -85,6 +95,54 @@ if os.path.exists("style.css"):
         box-shadow: 0 15px 30px rgba(16, 185, 129, 0.3) !important;
     }}
     
+    /* Estilo do formulário Streamlit como Card Glassmorphic */
+    form[data-testid="stForm"] {{
+        background: rgba(30, 41, 59, 0.7) !important;
+        backdrop-filter: blur(12px) !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        border-radius: 24px !important;
+        padding: 2rem !important;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3) !important;
+        animation: fadeIn 0.6s ease-out forwards;
+    }}
+    
+    /* Estilo do Card para o Gráfico Plotly */
+    div.stPlotlyChart {{
+        background: rgba(30, 41, 59, 0.7) !important;
+        backdrop-filter: blur(12px) !important;
+        border: 1px solid rgba(255, 255, 255, 0.1) !important;
+        border-radius: 24px !important;
+        padding: 1.5rem !important;
+        box-shadow: 0 20px 50px rgba(0, 0, 0, 0.3) !important;
+        margin-bottom: 2rem !important;
+        animation: fadeIn 0.6s ease-out forwards;
+    }}
+    
+    /* Estilo do botão de submissão do formulário para o gradiente premium */
+    div[data-testid="stFormSubmitButton"] button {{
+        background: linear-gradient(135deg, #4facfe, #7f00ff) !important;
+        border: none !important;
+        border-radius: 12px !important;
+        padding: 0.8rem 1.5rem !important;
+        color: white !important;
+        font-size: 1.1rem !important;
+        font-weight: 600 !important;
+        cursor: pointer !important;
+        transition: all 0.3s ease !important;
+        box-shadow: 0 10px 20px rgba(79, 172, 254, 0.2) !important;
+        width: 100% !important;
+        margin-top: 1rem !important;
+    }}
+    
+    div[data-testid="stFormSubmitButton"] button:hover {{
+        transform: translateY(-2px) !important;
+        box-shadow: 0 15px 30px rgba(79, 172, 254, 0.3) !important;
+    }}
+    
+    div[data-testid="stFormSubmitButton"] button:active {{
+        transform: translateY(0) !important;
+    }}
+    
     </style>
     """
     st.markdown(custom_css, unsafe_allow_html=True)
@@ -101,107 +159,123 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+# Inicializa o estado de sessão (Session State) para gerenciar o cálculo
+if 'calculated' not in st.session_state:
+    st.session_state.calculated = False
+    st.session_state.asset_value = 150000.00
+    st.session_state.interest_rate = 1.25
+    st.session_state.installments = 36
+    st.session_state.system = 'price'
+
 # Grid Layout Principal: 1 Coluna Lateral para Inputs, 1 Coluna Grande para Resultados
-col_inputs, col_resultados = st.columns([1.1, 2.9], gap="large")
+col_inputs, col_resultados = st.columns([1.1, 2.9])
+
+# Sistema de Opções
+system_options = {
+    "Tabela Price (Parcelas Fixas)": "price",
+    "SAC (Parcelas Decrescentes)": "sac"
+}
 
 with col_inputs:
-    st.markdown('<div class="card">', unsafe_allow_html=True)
-    st.subheader("Configurações")
-    
-    # Campo 1: Valor do Bem
-    asset_value = st.number_input(
-        "Valor do Bem (R$)",
-        min_value=0.0,
-        value=150000.00,
-        step=1000.00,
-        format="%.2f"
-    )
-    
-    # Campo 2: Taxa de Juros
-    interest_rate = st.number_input(
-        "Taxa de Juros (% a.m.)",
-        min_value=0.0,
-        value=1.25,
-        step=0.01,
-        format="%.2f"
-    )
-    
-    # Campo 3: Número de Parcelas
-    installments = st.number_input(
-        "Número de Parcelas",
-        min_value=1,
-        value=36,
-        step=1
-    )
-    
-    # Campo 4: Sistema de Amortização
-    system_options = {
-        "Tabela Price (Parcelas Fixas)": "price",
-        "SAC (Parcelas Decrescentes)": "sac"
-    }
-    selected_system_label = st.selectbox(
-        "Sistema de Amortização",
-        options=list(system_options.keys())
-    )
-    system = system_options[selected_system_label]
-    
-    st.markdown('</div>', unsafe_allow_html=True)
+    with st.form("simulador_form"):
+        st.markdown("<h3 style='margin-top: 0; margin-bottom: 1.5rem; font-family: Outfit; font-weight:600; color: #f8fafc;'>Configurações</h3>", unsafe_allow_html=True)
+        
+        asset_value = st.number_input(
+            "Valor do Bem (R$)",
+            min_value=0.0,
+            value=st.session_state.asset_value,
+            step=1000.00,
+            format="%.2f"
+        )
+        
+        interest_rate = st.number_input(
+            "Taxa de Juros (% a.m.)",
+            min_value=0.0,
+            value=st.session_state.interest_rate,
+            step=0.01,
+            format="%.2f"
+        )
+        
+        installments = st.number_input(
+            "Número de Parcelas",
+            min_value=1,
+            value=st.session_state.installments,
+            step=1
+        )
+        
+        default_index = 0 if st.session_state.system == 'price' else 1
+        selected_system_label = st.selectbox(
+            "Sistema de Amortização",
+            options=list(system_options.keys()),
+            index=default_index
+        )
+        system = system_options[selected_system_label]
+        
+        submitted = st.form_submit_button("Calcular Simulação")
+        
+        if submitted:
+            st.session_state.calculated = True
+            st.session_state.asset_value = asset_value
+            st.session_state.interest_rate = interest_rate
+            st.session_state.installments = installments
+            st.session_state.system = system
 
 with col_resultados:
-    if asset_value <= 0 or installments <= 0:
-        st.info("💡 Por favor, configure os valores ao lado para ver a simulação.")
+    if not st.session_state.calculated:
+        st.info("💡 Configure os parâmetros ao lado e clique em 'Calcular Simulação' para gerar os resultados.")
     else:
-        # Executa os cálculos utilizando o motor python
-        parcelas, total_juros = calcular_simulacao(asset_value, interest_rate, installments, system)
+        # Executa os cálculos utilizando os valores salvos na sessão
+        val_bem = st.session_state.asset_value
+        taxa_j = st.session_state.interest_rate
+        parc = st.session_state.installments
+        sis = st.session_state.system
         
-        total_financed = asset_value + total_juros
+        parcelas, total_juros = calcular_simulacao(val_bem, taxa_j, parc, sis)
+        
+        total_financed = val_bem + total_juros
         primeira_parcela = parcelas[0]['pmt']
         ultima_parcela = parcelas[-1]['pmt']
-        sistema_nome = "Price" if system == "price" else "SAC"
+        sistema_nome = "Price" if sis == "price" else "SAC"
         
-        # 1. Seção de Detalhes e Métricas Principais (Utilizando HTML idêntico ao original)
+        # 1. Seção de Detalhes e Métricas Principais (Utilizando HTML idêntico ao original, dedentado e sem linhas em branco para evitar interpretação de código no Markdown)
         st.markdown(f"""
-        <div class="card animate-fade-in" style="margin-bottom: 2rem;">
-            <div class="simulation-details">
-                <div>
-                    <span class="summary-label">Valor do Bem</span>
-                    <span class="detail-value">{formatar_brl(asset_value)}</span>
-                </div>
-                <div>
-                    <span class="summary-label">Taxa de Juros</span>
-                    <span class="detail-value">{interest_rate:.2f}% a.m.</span>
-                </div>
-                <div>
-                    <span class="summary-label">Parcelas</span>
-                    <span class="detail-value">{installments}x ({sistema_nome})</span>
-                </div>
-            </div>
-            
-            <div class="summary-cards">
-                <div class="summary-item">
-                    <span class="summary-label">Total Financiado</span>
-                    <span class="summary-value" style="color: #00f2fe;">{formatar_brl(total_financed)}</span>
-                </div>
-                <div class="summary-item">
-                    <span class="summary-label">Total de Juros</span>
-                    <span class="summary-value" style="color: #7f00ff;">{formatar_brl(total_juros)}</span>
-                </div>
-                <div class="summary-item">
-                    <span class="summary-label">Primeira Parcela</span>
-                    <span class="summary-value" style="color: #10b981;">{formatar_brl(primeira_parcela)}</span>
-                </div>
-                <div class="summary-item">
-                    <span class="summary-label">Última Parcela</span>
-                    <span class="summary-value" style="color: #f59e0b;">{formatar_brl(ultima_parcela)}</span>
-                </div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+<div class="card animate-fade-in" style="margin-bottom: 2rem;">
+<div class="simulation-details">
+<div>
+<span class="summary-label">Valor do Bem</span>
+<span class="detail-value">{formatar_brl(val_bem)}</span>
+</div>
+<div>
+<span class="summary-label">Taxa de Juros</span>
+<span class="detail-value">{taxa_j:.2f}% a.m.</span>
+</div>
+<div>
+<span class="summary-label">Parcelas</span>
+<span class="detail-value">{parc}x ({sistema_nome})</span>
+</div>
+</div>
+<div class="summary-cards">
+<div class="summary-item">
+<span class="summary-label">Total Financiado</span>
+<span class="summary-value" style="color: #00f2fe;">{formatar_brl(total_financed)}</span>
+</div>
+<div class="summary-item">
+<span class="summary-label">Total de Juros</span>
+<span class="summary-value" style="color: #7f00ff;">{formatar_brl(total_juros)}</span>
+</div>
+<div class="summary-item">
+<span class="summary-label">Primeira Parcela</span>
+<span class="summary-value" style="color: #10b981;">{formatar_brl(primeira_parcela)}</span>
+</div>
+<div class="summary-item">
+<span class="summary-label">Última Parcela</span>
+<span class="summary-value" style="color: #f59e0b;">{formatar_brl(ultima_parcela)}</span>
+</div>
+</div>
+</div>
+""", unsafe_allow_html=True)
         
         # 2. Gráfico Avançado de Evolução (Exclusivo da versão Python!)
-        st.markdown('<div class="card animate-fade-in" style="margin-bottom: 2rem;">', unsafe_allow_html=True)
-        st.markdown("<h3 style='margin-bottom: 1rem; font-family: Outfit; font-weight:600;'>Visualização de Evolução Financeira</h3>", unsafe_allow_html=True)
-        
         fig = go.Figure()
         
         # Barras de Amortização e Juros (Empilhados)
@@ -235,6 +309,14 @@ with col_resultados:
         
         # Configurando layout do gráfico com tema escuro elegante
         fig.update_layout(
+            title=dict(
+                text="Visualização de Evolução Financeira",
+                font=dict(color='#f8fafc', size=20, family='Outfit'),
+                y=0.95,
+                x=0.02,
+                xanchor='left',
+                yanchor='top'
+            ),
             barmode='stack',
             paper_bgcolor='rgba(0,0,0,0)',
             plot_bgcolor='rgba(0,0,0,0)',
@@ -258,7 +340,7 @@ with col_resultados:
                 tickfont=dict(color='#94a3b8'),
                 overlaying='y',
                 side='right',
-                gridcolor='transparent',
+                gridcolor='rgba(0,0,0,0)',
                 linecolor='rgba(255,255,255,0.1)'
             ),
             legend=dict(
@@ -269,48 +351,38 @@ with col_resultados:
                 x=1,
                 font=dict(color='#f8fafc', family='Outfit')
             ),
-            margin=dict(l=20, r=20, t=10, b=20),
+            margin=dict(l=20, r=20, t=80, b=20),
             hovermode="x unified",
             height=380
         )
         st.plotly_chart(fig, use_container_width=True)
-        st.markdown('</div>', unsafe_allow_html=True)
         
         # 3. Tabela de Detalhes em HTML Premium
-        st.markdown('<div class="card animate-fade-in">', unsafe_allow_html=True)
-        
         table_rows_html = ""
         for p in parcelas:
-            table_rows_html += f"""
-            <tr>
-                <td>{p['num']}</td>
-                <td class="highlight">{formatar_brl(p['pmt'])}</td>
-                <td>{formatar_brl(p['amortizacao'])}</td>
-                <td>{formatar_brl(p['juros'])}</td>
-                <td>{formatar_brl(p['saldo_devedor'])}</td>
-                <td><span class="discount-badge">-{formatar_brl(p['desconto'])}</span></td>
-            </tr>
-            """
+            table_rows_html += f"<tr><td>{p['num']}</td><td class='highlight'>{formatar_brl(p['pmt'])}</td><td>{formatar_brl(p['amortizacao'])}</td><td>{formatar_brl(p['juros'])}</td><td>{formatar_brl(p['saldo_devedor'])}</td><td><span class='discount-badge'>-{formatar_brl(p['desconto'])}</span></td></tr>"
         
         table_html = f"""
-        <div class="results-table-container">
-            <h3 style="font-family: Outfit; font-weight:600; margin-bottom: 0.5rem;">Detalhamento das Parcelas</h3>
-            <table>
-                <thead>
-                    <tr>
-                        <th>#</th>
-                        <th>Parcela</th>
-                        <th>Amortização</th>
-                        <th>Juros</th>
-                        <th>Saldo Devedor</th>
-                        <th>Desc. Antecip.</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {table_rows_html}
-                </tbody>
-            </table>
-        </div>
+<div class="card animate-fade-in" style="margin-bottom: 2rem;">
+<div class="results-table-container">
+<h3 style="font-family: Outfit; font-weight:600; margin-bottom: 0.5rem;">Detalhamento das Parcelas</h3>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Parcela</th>
+<th>Amortização</th>
+<th>Juros</th>
+<th>Saldo Devedor</th>
+<th>Desc. Antecip.</th>
+</tr>
+</thead>
+<tbody>
+{table_rows_html}
+</tbody>
+</table>
+</div>
+</div>
         """
         st.markdown(table_html, unsafe_allow_html=True)
         
@@ -322,8 +394,6 @@ with col_resultados:
         st.download_button(
             label="📥 Exportar Simulação para Excel / CSV",
             data=csv_data,
-            file_name=f"simulacao_{sistema_nome.lower()}_{int(asset_value)}.csv",
+            file_name=f"simulacao_{sistema_nome.lower()}_{int(val_bem)}.csv",
             mime="text/csv"
         )
-        
-        st.markdown('</div>', unsafe_allow_html=True)

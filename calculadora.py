@@ -1,5 +1,6 @@
 """
 Módulo de cálculo de simulação de financiamento (SAC e Price) com desconto por antecipação.
+Possui um motor de arredondamento financeiro de alta precisão (livre de discrepâncias de centavos).
 """
 
 def calcular_simulacao(valor_bem: float, taxa_juros: float, n_parcelas: int, sistema: str):
@@ -23,75 +24,84 @@ def calcular_simulacao(valor_bem: float, taxa_juros: float, n_parcelas: int, sis
         - Uma lista contendo os dicionários com o detalhamento de cada parcela.
         - O valor total dos juros acumulados no período.
     """
+    # Tipagem defensiva robusta
+    valor_bem = float(valor_bem)
+    taxa_juros = float(taxa_juros)
+    n_parcelas = int(n_parcelas)
+    
     taxa = taxa_juros / 100.0
-    balance = valor_bem
+    balance = round(valor_bem, 2)
     total_juros = 0.0
     parcelas = []
     
     if sistema == 'price':
-        # Se a taxa for zero, a parcela é apenas a divisão simples do valor
         if taxa == 0:
-            pmt = valor_bem / n_parcelas
+            pmt_calc = valor_bem / n_parcelas
         else:
-            # Fórmula Tabela Price: PMT = PV * [i * (1+i)^n] / [(1+i)^n - 1]
-            pmt = valor_bem * (taxa * (1 + taxa)**n_parcelas) / ((1 + taxa)**n_parcelas - 1)
-            
+            # Tabela Price Formula: PMT = PV * [i * (1+i)^n] / [(1+i)^n - 1]
+            pmt_calc = valor_bem * (taxa * (1 + taxa)**n_parcelas) / ((1 + taxa)**n_parcelas - 1)
+        
+        pmt_standard = round(pmt_calc, 2)
+        
         for i in range(1, n_parcelas + 1):
-            juros = balance * taxa
-            amortizacao = pmt - juros
+            juros = round(balance * taxa, 2)
             
-            # Evita problemas de arredondamento de ponto flutuante na última parcela
             if i == n_parcelas:
-                amortizacao = balance
-                pmt = amortizacao + juros
+                # Na última parcela, a amortização liquida exatamente o saldo restante
+                amortizacao = round(balance, 2)
+                pmt = round(amortizacao + juros, 2)
+            else:
+                amortizacao = round(pmt_standard - juros, 2)
+                pmt = pmt_standard
                 
-            # Fórmula do desconto por antecipação: pmt - (pmt / (1 + i)^n_parcela)
             if taxa == 0:
                 desconto = 0.0
             else:
-                desconto = pmt - (pmt / ((1 + taxa)**i))
+                desconto = round(pmt - (pmt / ((1 + taxa)**i)), 2)
                 
-            balance_restante = max(0.0, balance - amortizacao)
+            balance_restante = round(max(0.0, balance - amortizacao), 2)
             
             parcelas.append({
                 "num": i,
-                "pmt": round(pmt, 2),
-                "amortizacao": round(amortizacao, 2),
-                "juros": round(juros, 2),
-                "saldo_devedor": round(balance_restante, 2),
-                "desconto": round(desconto, 2)
+                "pmt": pmt,
+                "amortizacao": amortizacao,
+                "juros": juros,
+                "saldo_devedor": balance_restante,
+                "desconto": desconto
             })
             
             balance = balance_restante
             total_juros += juros
             
     else: # SAC
-        # Fórmula SAC: Amortização constante = PV / n
-        amortizacao = valor_bem / n_parcelas
+        # Amortização padrão SAC (arredondada para 2 casas)
+        amortizacao_standard = round(valor_bem / n_parcelas, 2)
         
         for i in range(1, n_parcelas + 1):
-            juros = balance * taxa
-            pmt = amortizacao + juros
+            juros = round(balance * taxa, 2)
             
-            # Evita problemas de arredondamento de ponto flutuante na última parcela
             if i == n_parcelas:
-                amortizacao = balance
-                pmt = amortizacao + juros
+                # Na última parcela, amortiza exatamente o saldo devedor restante
+                amortizacao = round(balance, 2)
+            else:
+                amortizacao = amortizacao_standard
                 
+            pmt = round(amortizacao + juros, 2)
+            
             if taxa == 0:
                 desconto = 0.0
             else:
-                desconto = pmt - (pmt / ((1 + taxa)**i))
+                desconto = round(pmt - (pmt / ((1 + taxa)**i)), 2)
                 
-            balance_restante = max(0.0, balance - amortizacao)
+            balance_restante = round(max(0.0, balance - amortizacao), 2)
             
             parcelas.append({
                 "num": i,
-                "pmt": round(pmt, 2),
-                "amortizacao": round(amortizacao, 2),
-                "juros": round(juros, 2),
-                "saldo_devedor": round(balance_restante, 2),
-                "desconto": round(desconto, 2)
+                "pmt": pmt,
+                "amortizacao": amortizacao,
+                "juros": juros,
+                "saldo_devedor": balance_restante,
+                "desconto": desconto
             })
             
             balance = balance_restante
