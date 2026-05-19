@@ -321,22 +321,28 @@ with col_resultados:
             paper_bgcolor='rgba(0,0,0,0)',
             plot_bgcolor='rgba(0,0,0,0)',
             xaxis=dict(
-                title='Número da Parcela',
-                titlefont=dict(color='#94a3b8', family='Outfit'),
+                title=dict(
+                    text='Número da Parcela',
+                    font=dict(color='#94a3b8', family='Outfit')
+                ),
                 tickfont=dict(color='#94a3b8'),
                 gridcolor='rgba(255,255,255,0.05)',
                 linecolor='rgba(255,255,255,0.1)'
             ),
             yaxis=dict(
-                title='Valor da Parcela / Componentes (R$)',
-                titlefont=dict(color='#94a3b8', family='Outfit'),
+                title=dict(
+                    text='Valor da Parcela / Componentes (R$)',
+                    font=dict(color='#94a3b8', family='Outfit')
+                ),
                 tickfont=dict(color='#94a3b8'),
                 gridcolor='rgba(255,255,255,0.05)',
                 linecolor='rgba(255,255,255,0.1)'
             ),
             yaxis2=dict(
-                title='Saldo Devedor Restante (R$)',
-                titlefont=dict(color='#94a3b8', family='Outfit'),
+                title=dict(
+                    text='Saldo Devedor Restante (R$)',
+                    font=dict(color='#94a3b8', family='Outfit')
+                ),
                 tickfont=dict(color='#94a3b8'),
                 overlaying='y',
                 side='right',
